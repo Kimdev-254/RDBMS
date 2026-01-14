@@ -8,7 +8,7 @@ TOKEN_SPEC = [
     ('IDENT',   r'[A-Za-z_][A-Za-z0-9_]*'),
     ('OP',      r'=|<|>'),
     ('SKIP',    r'[ \t\n]+'),
-    ('SYMBOL',  r'[(),;]'),
+    ('SYMBOL',  r'[(),;*]'),
 ]
 
 KEYWORDS = {

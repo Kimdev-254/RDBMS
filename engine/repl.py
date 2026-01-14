@@ -1,23 +1,27 @@
-# REPL - It cooordinates the three main phases of query processing: Tokenizing, Parsing, and Executing
-
 from engine.tokenizer import tokenize
-from engine.parser import parse_select
+from engine.parser import parse
 from engine.database import Database
 from engine.executor import Executor
 
-db = Database()
-executor = Executor(db)
+def main():
+    db = Database()
+    executor = Executor(db)
 
-while True:
-    try:
-        sql = input('db> ')
-        if sql.lower() in ('exit', 'quit'):
-            break
+    print("Mini RDBMS started. Type 'exit' to quit.")
 
-        tokens = tokenize(sql)
-        ast = parse_select(tokens)
-        result = executor.execute(ast)
-        print(result)
+    while True:
+        try:
+            sql = input('db> ').strip()
+            if sql.lower() in ('exit', 'quit'):
+                break
 
-    except Exception as e:
-        print('Error:', e)
+            tokens = tokenize(sql)
+            ast = parse(tokens)
+            result = executor.execute(ast)
+            print(result)
+
+        except Exception as e:
+            print("Error:", e)
+
+if __name__ == "__main__":
+    main()
