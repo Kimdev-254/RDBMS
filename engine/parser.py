@@ -8,6 +8,8 @@ def parse(tokens):
         return parse_select(tokens)
     if first == 'CREATE':
         return parse_create(tokens)
+    if first == 'INSERT':
+        return parse_insert(tokens)
 
     raise SyntaxError(f"Unsupported statement: {first}")
 
@@ -16,12 +18,10 @@ def parse(tokens):
 # SELECT
 # =========================
 def parse_select(tokens):
-    i = 0
-
-    # SELECT
+    i = 0  # SELECT
     i += 1
 
-    # COLUMNS
+    # columns
     columns = []
     if tokens[i][1] == '*':
         columns.append('*')
@@ -42,20 +42,28 @@ def parse_select(tokens):
         raise SyntaxError("Expected FROM")
     i += 1
 
-    # TABLE
+    # table
+    if tokens[i][0] != 'IDENT':
+        raise SyntaxError("Expected table name")
     table = tokens[i][1]
     i += 1
 
-    # OPTIONAL WHERE
+    # optional WHERE
     where = None
     if i < len(tokens) and tokens[i][1] == 'WHERE':
         i += 1
-        col = tokens[i][1]; i += 1
-        op = tokens[i][1]; i += 1
+
+        col = tokens[i][1]
+        i += 1
+
+        op = tokens[i][1]
+        i += 1
+
         val_type, val = tokens[i]
         if val_type == 'NUMBER':
             val = int(val)
         i += 1
+
         where = (col, op, val)
 
     return {
@@ -70,17 +78,14 @@ def parse_select(tokens):
 # CREATE TABLE
 # =========================
 def parse_create(tokens):
-    i = 0
-
-    # CREATE
+    i = 0  # CREATE
     i += 1
 
     if tokens[i][1] != 'TABLE':
         raise SyntaxError("Expected TABLE")
     i += 1
 
-    # table name
-    table_name = tokens[i][1]
+    table = tokens[i][1]
     i += 1
 
     if tokens[i][1] != '(':
@@ -95,10 +100,9 @@ def parse_create(tokens):
         col_name = tokens[i][1]
         i += 1
 
-        col_type = tokens[i][1]
+        col_type = tokens[i][1]  # INT / TEXT (ignored for now)
         i += 1
 
-        # constraints
         if i < len(tokens) and tokens[i][1] == 'PRIMARY':
             i += 1
             if tokens[i][1] != 'KEY':
@@ -124,8 +128,61 @@ def parse_create(tokens):
 
     return {
         'type': 'CREATE_TABLE',
-        'table': table_name,
+        'table': table,
         'columns': columns,
         'primary_key': primary_key,
         'unique_cols': unique_cols
+    }
+
+
+# =========================
+# INSERT
+# =========================
+def parse_insert(tokens):
+    i = 0  # INSERT
+    i += 1
+
+    if tokens[i][1] != 'INTO':
+        raise SyntaxError("Expected INTO")
+    i += 1
+
+    table = tokens[i][1]
+    i += 1
+
+    if tokens[i][1] != 'VALUES':
+        raise SyntaxError("Expected VALUES")
+    i += 1
+
+    if tokens[i][1] != '(':
+        raise SyntaxError("Expected (")
+    i += 1
+
+    values = []
+
+    while True:
+        token_type, token_value = tokens[i]
+
+        if token_type == 'NUMBER':
+            values.append(int(token_value))
+        elif token_type == 'STRING':
+            values.append(token_value)
+        else:
+            raise SyntaxError("Invalid value in INSERT")
+
+        i += 1
+
+        if tokens[i][1] == ',':
+            i += 1
+            continue
+
+        if tokens[i][1] == ')':
+            i += 1
+            break
+
+        raise SyntaxError("Invalid INSERT syntax")
+
+    return {
+        'type': 'INSERT',
+        'table': table,
+        'values': values
     }

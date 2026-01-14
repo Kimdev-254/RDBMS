@@ -1,5 +1,3 @@
-# Executor - taes the AST (dictionary creayed by the parser)
-
 class Executor:
     def __init__(self, db):
         self.db = db
@@ -10,6 +8,9 @@ class Executor:
 
         if ast['type'] == 'CREATE_TABLE':
             return self._create_table(ast)
+
+        if ast['type'] == 'INSERT':
+            return self._insert(ast)
 
         raise ValueError("Unknown AST type")
 
@@ -32,3 +33,14 @@ class Executor:
             ast['unique_cols']
         )
         return f"Table '{ast['table']}' created"
+
+    def _insert(self, ast):
+        table = self.db.get_table(ast['table'])
+
+        if len(ast['values']) != len(table.columns):
+            raise ValueError("Column count does not match values")
+
+        row = dict(zip(table.columns, ast['values']))
+        table.insert(row)
+
+        return "1 row inserted"
