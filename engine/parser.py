@@ -10,6 +10,10 @@ def parse(tokens):
         return parse_create(tokens)
     if first == 'INSERT':
         return parse_insert(tokens)
+    if first == 'UPDATE':
+        return parse_update(tokens)
+    if first == 'DELETE':
+        return parse_delete(tokens)
 
     raise SyntaxError(f"Unsupported statement: {first}")
 
@@ -185,4 +189,88 @@ def parse_insert(tokens):
         'type': 'INSERT',
         'table': table,
         'values': values
+    }
+
+# =========================
+# UPDATE
+# =========================
+def parse_update(tokens):
+    i = 0  # UPDATE
+    i += 1
+
+    table = tokens[i][1]
+    i += 1
+
+    if tokens[i][1] != 'SET':
+        raise SyntaxError("Expected SET")
+    i += 1
+
+    column = tokens[i][1]
+    i += 1
+
+    if tokens[i][1] != '=':
+        raise SyntaxError("Expected =")
+    i += 1
+
+    val_type, val = tokens[i]
+    if val_type == 'NUMBER':
+        val = int(val)
+    i += 1
+
+    if tokens[i][1] != 'WHERE':
+        raise SyntaxError("UPDATE without WHERE is not allowed")
+    i += 1
+
+    where_col = tokens[i][1]
+    i += 1
+
+    op = tokens[i][1]
+    i += 1
+
+    where_type, where_val = tokens[i]
+    if where_type == 'NUMBER':
+        where_val = int(where_val)
+    i += 1
+
+    return {
+        'type': 'UPDATE',
+        'table': table,
+        'set': (column, val),
+        'where': (where_col, op, where_val)
+    }
+
+
+# =========================
+# DELETE
+# =========================
+def parse_delete(tokens):
+    i = 0  # DELETE
+    i += 1
+
+    if tokens[i][1] != 'FROM':
+        raise SyntaxError("Expected FROM")
+    i += 1
+
+    table = tokens[i][1]
+    i += 1
+
+    if tokens[i][1] != 'WHERE':
+        raise SyntaxError("DELETE without WHERE is not allowed")
+    i += 1
+
+    col = tokens[i][1]
+    i += 1
+
+    op = tokens[i][1]
+    i += 1
+
+    val_type, val = tokens[i]
+    if val_type == 'NUMBER':
+        val = int(val)
+    i += 1
+
+    return {
+        'type': 'DELETE',
+        'table': table,
+        'where': (col, op, val)
     }

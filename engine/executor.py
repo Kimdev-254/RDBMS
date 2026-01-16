@@ -12,6 +12,12 @@ class Executor:
         if ast['type'] == 'INSERT':
             return self._insert(ast)
 
+        if ast['type'] == 'UPDATE':
+            return self._update(ast)
+
+        if ast['type'] == 'DELETE':
+            return self._delete(ast)
+
         raise ValueError("Unknown AST type")
 
     def _select(self, ast):
@@ -44,3 +50,30 @@ class Executor:
         table.insert(row)
 
         return "1 row inserted"
+
+    def _update(self, ast):
+        table = self.db.get_table(ast['table'])
+        col, new_val = ast['set']
+        where = ast['where']
+
+        count = 0
+        for row in table.rows:
+            if where[1] == '=' and row[where[0]] == where[2]:
+                row[col] = new_val
+            count += 1
+
+        return f"{count} row(s) updated"
+
+    def _delete(self, ast):
+        table = self.db.get_table(ast['table'])
+        col, op, val = ast['where']
+
+        before = len(table.rows)
+        table.rows = [
+            r for r in table.rows
+            if not (op == '=' and r[col] == val)
+        ]
+        deleted = before - len(table.rows)
+
+        return f"{deleted} row(s) deleted"
+
