@@ -1,276 +1,99 @@
-def parse(tokens):
-    if not tokens:
-        raise SyntaxError("Empty input")
+import re
 
-    first = tokens[0][1]
+class Parser:
+    def parse(self, query):
+        query = query.strip().rstrip(";")
 
-    if first == 'SELECT':
-        return parse_select(tokens)
-    if first == 'CREATE':
-        return parse_create(tokens)
-    if first == 'INSERT':
-        return parse_insert(tokens)
-    if first == 'UPDATE':
-        return parse_update(tokens)
-    if first == 'DELETE':
-        return parse_delete(tokens)
+        if query.upper().startswith("CREATE TABLE"):
+            return self._parse_create(query)
 
-    raise SyntaxError(f"Unsupported statement: {first}")
+        if query.upper().startswith("INSERT"):
+            return self._parse_insert(query)
 
+        if query.upper().startswith("SELECT"):
+            return self._parse_select(query)
 
-# =========================
-# SELECT
-# =========================
-def parse_select(tokens):
-    i = 0  # SELECT
-    i += 1
+        raise ValueError("Unsupported query")
 
-    # columns
-    columns = []
-    if tokens[i][1] == '*':
-        columns.append('*')
-        i += 1
-    else:
-        while True:
-            if tokens[i][0] != 'IDENT':
-                raise SyntaxError("Expected column name")
-            columns.append(tokens[i][1])
-            i += 1
-            if i < len(tokens) and tokens[i][1] == ',':
-                i += 1
-                continue
-            break
+    def _parse_create(self, query):
+        match = re.match(r"CREATE TABLE (\w+)\s*\((.+)\)", query, re.IGNORECASE)
+        if not match:
+            raise ValueError("Invalid CREATE TABLE syntax")
 
-    # FROM
-    if tokens[i][1] != 'FROM':
-        raise SyntaxError("Expected FROM")
-    i += 1
+        table = match.group(1)
+        cols_raw = match.group(2).split(",")
 
-    # table
-    if tokens[i][0] != 'IDENT':
-        raise SyntaxError("Expected table name")
-    table = tokens[i][1]
-    i += 1
+        columns = []
+        primary_key = None
+        unique_cols = []
 
-    # optional WHERE
-    where = None
-    if i < len(tokens) and tokens[i][1] == 'WHERE':
-        i += 1
+        for col in cols_raw:
+            parts = col.strip().split()
+            name = parts[0]
+            columns.append(name)
 
-        col = tokens[i][1]
-        i += 1
+            if "PRIMARY" in parts:
+                primary_key = name
+            if "UNIQUE" in parts:
+                unique_cols.append(name)
 
-        op = tokens[i][1]
-        i += 1
+        return {
+            "type": "CREATE",
+            "table": table,
+            "columns": columns,
+            "primary_key": primary_key,
+            "unique": unique_cols,
+        }
 
-        val_type, val = tokens[i]
-        if val_type == 'NUMBER':
-            val = int(val)
-        i += 1
+    def _parse_insert(self, query):
+        match = re.match(r"INSERT INTO (\w+) VALUES\s*\((.+)\)", query, re.IGNORECASE)
+        if not match:
+            raise ValueError("Invalid INSERT syntax")
 
-        where = (col, op, val)
+        values = []
+        for v in match.group(2).split(","):
+            v = v.strip()
+            if v.startswith("'") and v.endswith("'"):
+                values.append(v[1:-1])
+            else:
+                values.append(int(v))
 
-    return {
-        'type': 'SELECT',
-        'columns': columns,
-        'table': table,
-        'where': where
-    }
+        return {
+            "type": "INSERT",
+            "table": match.group(1),
+            "values": values,
+        }
 
+    def _parse_select(self, query):
+        join = re.match(
+            r"SELECT \* FROM (\w+) JOIN (\w+) ON (\w+)\.(\w+) = (\w+)\.(\w+)",
+            query,
+            re.IGNORECASE,
+        )
 
-# =========================
-# CREATE TABLE
-# =========================
-def parse_create(tokens):
-    i = 0  # CREATE
-    i += 1
+        if join:
+            return {
+                "type": "JOIN",
+                "left": join.group(1),
+                "right": join.group(2),
+                "left_col": join.group(4),
+                "right_col": join.group(6),
+            }
 
-    if tokens[i][1] != 'TABLE':
-        raise SyntaxError("Expected TABLE")
-    i += 1
+        simple = re.match(
+            r"SELECT \* FROM (\w+)(?: WHERE (\w+) = '?(.*?)'?)?$",
+            query,
+            re.IGNORECASE,
+        )
 
-    table = tokens[i][1]
-    i += 1
+        if simple:
+            where = None
+            if simple.group(2):
+                where = (simple.group(2), "=", simple.group(3))
+            return {
+                "type": "SELECT",
+                "table": simple.group(1),
+                "where": where,
+            }
 
-    if tokens[i][1] != '(':
-        raise SyntaxError("Expected (")
-    i += 1
-
-    columns = []
-    primary_key = None
-    unique_cols = []
-
-    while True:
-        col_name = tokens[i][1]
-        i += 1
-
-        col_type = tokens[i][1]  # INT / TEXT (ignored for now)
-        i += 1
-
-        if i < len(tokens) and tokens[i][1] == 'PRIMARY':
-            i += 1
-            if tokens[i][1] != 'KEY':
-                raise SyntaxError("Expected KEY")
-            i += 1
-            primary_key = col_name
-
-        elif i < len(tokens) and tokens[i][1] == 'UNIQUE':
-            unique_cols.append(col_name)
-            i += 1
-
-        columns.append(col_name)
-
-        if tokens[i][1] == ',':
-            i += 1
-            continue
-
-        if tokens[i][1] == ')':
-            i += 1
-            break
-
-        raise SyntaxError("Invalid CREATE TABLE syntax")
-
-    return {
-        'type': 'CREATE_TABLE',
-        'table': table,
-        'columns': columns,
-        'primary_key': primary_key,
-        'unique_cols': unique_cols
-    }
-
-
-# =========================
-# INSERT
-# =========================
-def parse_insert(tokens):
-    i = 0  # INSERT
-    i += 1
-
-    if tokens[i][1] != 'INTO':
-        raise SyntaxError("Expected INTO")
-    i += 1
-
-    table = tokens[i][1]
-    i += 1
-
-    if tokens[i][1] != 'VALUES':
-        raise SyntaxError("Expected VALUES")
-    i += 1
-
-    if tokens[i][1] != '(':
-        raise SyntaxError("Expected (")
-    i += 1
-
-    values = []
-
-    while True:
-        token_type, token_value = tokens[i]
-
-        if token_type == 'NUMBER':
-            values.append(int(token_value))
-        elif token_type == 'STRING':
-            values.append(token_value)
-        else:
-            raise SyntaxError("Invalid value in INSERT")
-
-        i += 1
-
-        if tokens[i][1] == ',':
-            i += 1
-            continue
-
-        if tokens[i][1] == ')':
-            i += 1
-            break
-
-        raise SyntaxError("Invalid INSERT syntax")
-
-    return {
-        'type': 'INSERT',
-        'table': table,
-        'values': values
-    }
-
-# =========================
-# UPDATE
-# =========================
-def parse_update(tokens):
-    i = 0  # UPDATE
-    i += 1
-
-    table = tokens[i][1]
-    i += 1
-
-    if tokens[i][1] != 'SET':
-        raise SyntaxError("Expected SET")
-    i += 1
-
-    column = tokens[i][1]
-    i += 1
-
-    if tokens[i][1] != '=':
-        raise SyntaxError("Expected =")
-    i += 1
-
-    val_type, val = tokens[i]
-    if val_type == 'NUMBER':
-        val = int(val)
-    i += 1
-
-    if tokens[i][1] != 'WHERE':
-        raise SyntaxError("UPDATE without WHERE is not allowed")
-    i += 1
-
-    where_col = tokens[i][1]
-    i += 1
-
-    op = tokens[i][1]
-    i += 1
-
-    where_type, where_val = tokens[i]
-    if where_type == 'NUMBER':
-        where_val = int(where_val)
-    i += 1
-
-    return {
-        'type': 'UPDATE',
-        'table': table,
-        'set': (column, val),
-        'where': (where_col, op, where_val)
-    }
-
-
-# =========================
-# DELETE
-# =========================
-def parse_delete(tokens):
-    i = 0  # DELETE
-    i += 1
-
-    if tokens[i][1] != 'FROM':
-        raise SyntaxError("Expected FROM")
-    i += 1
-
-    table = tokens[i][1]
-    i += 1
-
-    if tokens[i][1] != 'WHERE':
-        raise SyntaxError("DELETE without WHERE is not allowed")
-    i += 1
-
-    col = tokens[i][1]
-    i += 1
-
-    op = tokens[i][1]
-    i += 1
-
-    val_type, val = tokens[i]
-    if val_type == 'NUMBER':
-        val = int(val)
-    i += 1
-
-    return {
-        'type': 'DELETE',
-        'table': table,
-        'where': (col, op, val)
-    }
+        raise ValueError("Invalid SELECT syntax")
